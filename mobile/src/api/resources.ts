@@ -9,6 +9,7 @@ import type {
   MediaSearchResult,
   MediaType,
   Review,
+  TrendingMediaItem,
   User,
 } from './types';
 
@@ -41,6 +42,7 @@ export const AuthApi = {
 
 export const UsersApi = {
   search: (q: string) => api.get<User[]>('/api/users/search', { q }),
+  suggested: () => api.get<User[]>('/api/users/suggested'),
   profile: (username: string) => api.get<User>(`/api/users/${encodeURIComponent(username)}`),
   follow: (username: string) => api.post<{ following: boolean }>(`/api/users/${encodeURIComponent(username)}/follow`),
   unfollow: (username: string) => api.delete<{ following: boolean }>(`/api/users/${encodeURIComponent(username)}/follow`),
@@ -52,6 +54,7 @@ export const UsersApi = {
 
 export const MediaApi = {
   search: (type: MediaType, q: string) => api.get<MediaSearchResult[]>('/api/media/search', { type, q }),
+  trending: (type?: MediaType) => api.get<TrendingMediaItem[]>('/api/media/trending', type ? { type } : undefined),
   detail: (id: number) => api.get<MediaDetail>(`/api/media/${id}`),
 };
 

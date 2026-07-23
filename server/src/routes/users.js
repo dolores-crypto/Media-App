@@ -18,6 +18,7 @@ import {
   publicLog,
   publicReview,
   likeMeta,
+  getSuggestedUsers,
 } from '../store.js';
 
 function requireProfile(db, username) {
@@ -38,6 +39,13 @@ export function registerUserRoutes(router, db, secret) {
         publicUser(u, { isFollowedByMe: viewer ? isFollowing(db, viewer.id, u.id) : false })
       ),
     };
+  });
+
+  // Registered before `/api/users/:username` so "suggested" isn't parsed as a username.
+  router.get('/api/users/suggested', (ctx) => {
+    const viewer = requireAuth(ctx, db, secret);
+    const results = getSuggestedUsers(db, viewer.id, { limit: 20 });
+    return { body: results.map((u) => publicUser(u, { followerCount: u.follower_count })) };
   });
 
   router.get('/api/users/:username', (ctx) => {

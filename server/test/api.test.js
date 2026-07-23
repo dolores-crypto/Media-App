@@ -339,3 +339,52 @@ test('comments: create, list, owner-only delete', async () => {
   const listAfter = await api(`/api/reviews/${review.json.id}/comments`);
   assert.equal(listAfter.json.length, 0);
 });
+
+test('trending media ranks by activity and supports a type filter', async () => {
+  const quinn = await registerUser('quinn');
+  const rachel = await registerUser('rachel');
+
+  const popular = { ...MEDIA_A, externalId: 'trend-popular' };
+  const rare = { type: 'movie', source: 'manual', externalId: 'trend-rare', title: 'Rare Trending Movie', creator: '', year: '', coverUrl: '' };
+
+  await api('/api/logs', { method: 'POST', token: quinn.token, body: { media: popular, status: 'finished' } });
+  await api('/api/logs', { method: 'POST', token: rachel.token, body: { media: popular, status: 'want' } });
+  await api('/api/logs', { method: 'POST', token: rachel.token, body: { media: rare, status: 'want' } });
+
+  const trending = await api('/api/media/trending');
+  assert.equal(trending.status, 200);
+  const titles = trending.json.map((m) => m.title);
+  assert.ok(titles.includes(popular.title));
+  assert.ok(titles.includes(rare.title));
+  assert.ok(titles.indexOf(popular.title) < titles.indexOf(rare.title), 'busier item ranks first');
+
+  const filtered = await api('/api/media/trending?type=movie');
+  assert.equal(filtered.status, 200);
+  assert.ok(filtered.json.every((m) => m.type === 'movie'));
+  assert.ok(filtered.json.some((m) => m.title === rare.title));
+
+  const badType = await api('/api/media/trending?type=vinyl');
+  assert.equal(badType.status, 400);
+});
+
+test('suggested users excludes self and already-followed, ranks by follower count', async () => {
+  const sam = await registerUser('sam');
+  const tara = await registerUser('tara');
+  const uma = await registerUser('uma');
+  const vince = await registerUser('vince');
+
+  await api('/api/users/tara/follow', { method: 'POST', token: uma.token });
+  await api('/api/users/uma/follow', { method: 'POST', token: sam.token });
+
+  const noAuth = await api('/api/users/suggested');
+  assert.equal(noAuth.status, 401);
+
+  const suggestions = await api('/api/users/suggested', { token: sam.token });
+  assert.equal(suggestions.status, 200);
+  const usernames = suggestions.json.map((u) => u.username);
+  assert.ok(!usernames.includes('sam'), 'excludes self');
+  assert.ok(!usernames.includes('uma'), 'excludes already-followed');
+  assert.ok(usernames.includes('tara'));
+  assert.ok(usernames.includes('vince'));
+  assert.ok(usernames.indexOf('tara') < usernames.indexOf('vince'), 'more-followed user ranks first');
+});

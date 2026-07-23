@@ -43,6 +43,12 @@ export interface MediaDetail extends MediaItem {
   reviews: Review[];
 }
 
+export interface TrendingMediaItem extends MediaItem {
+  ratingCount: number;
+  averageRating: number | null;
+  activityCount: number;
+}
+
 export interface LogEntry {
   id: number;
   status: LogStatus;

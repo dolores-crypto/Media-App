@@ -22,6 +22,7 @@ export function SearchScreen() {
   const [mode, setMode] = useState<Mode>('book');
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
+  const isDiscover = query.length <= 1;
 
   useEffect(() => {
     const timer = setTimeout(() => setQuery(input.trim()), 350);
@@ -31,23 +32,38 @@ export function SearchScreen() {
   const mediaSearch = useQuery({
     queryKey: ['search', mode, query],
     queryFn: () => MediaApi.search(mode as MediaType, query),
-    enabled: mode !== 'people' && query.length > 1,
+    enabled: mode !== 'people' && !isDiscover,
   });
 
   const peopleSearch = useQuery({
     queryKey: ['userSearch', query],
     queryFn: () => UsersApi.search(query),
-    enabled: mode === 'people' && query.length > 1,
+    enabled: mode === 'people' && !isDiscover,
   });
 
-  const isFetching = mode === 'people' ? peopleSearch.isFetching : mediaSearch.isFetching;
-  const error = mode === 'people' ? peopleSearch.error : mediaSearch.error;
+  const trending = useQuery({
+    queryKey: ['trending', mode],
+    queryFn: () => MediaApi.trending(mode as MediaType),
+    enabled: mode !== 'people' && isDiscover,
+  });
+
+  const suggested = useQuery({
+    queryKey: ['suggestedUsers'],
+    queryFn: () => UsersApi.suggested(),
+    enabled: mode === 'people' && isDiscover,
+  });
+
+  const isPeople = mode === 'people';
+  const activeQuery = isPeople ? (isDiscover ? suggested : peopleSearch) : isDiscover ? trending : mediaSearch;
+  const { isFetching, error } = activeQuery;
+
+  const heading = isDiscover ? (isPeople ? 'People to follow' : `Trending ${modeLabel(mode).toLowerCase()}s`) : null;
 
   return (
     <View style={styles.container}>
       <TextInput
         style={styles.input}
-        placeholder={mode === 'people' ? 'Search people...' : `Search ${modeLabel(mode).toLowerCase()}s...`}
+        placeholder={isPeople ? 'Search people...' : `Search ${modeLabel(mode).toLowerCase()}s...`}
         placeholderTextColor={colors.textMuted}
         value={input}
         onChangeText={setInput}
@@ -65,13 +81,14 @@ export function SearchScreen() {
         })}
       </View>
 
+      {heading ? <Text style={styles.heading}>{heading}</Text> : null}
       {isFetching ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.md }} /> : null}
-      {error ? <Text style={styles.emptyText}>Search failed. Check your connection and try again.</Text> : null}
+      {error ? <Text style={styles.emptyText}>Something went wrong. Check your connection and try again.</Text> : null}
 
-      {mode === 'people' ? (
+      {isPeople ? (
         <FlatList
           style={styles.list}
-          data={peopleSearch.data ?? []}
+          data={(isDiscover ? suggested.data : peopleSearch.data) ?? []}
           keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => (
             <Pressable style={styles.personRow} onPress={() => navigation.navigate('Profile', { username: item.username })}>
@@ -84,22 +101,49 @@ export function SearchScreen() {
               )}
               <View>
                 <Text style={styles.personName}>{item.displayName}</Text>
-                <Text style={styles.personHandle}>@{item.username}</Text>
+                <Text style={styles.personHandle}>
+                  @{item.username}
+                  {isDiscover && item.followerCount ? ` · ${item.followerCount} follower${item.followerCount === 1 ? '' : 's'}` : ''}
+                </Text>
               </View>
             </Pressable>
           )}
           ListEmptyComponent={
-            !isFetching && query.length > 1 ? <Text style={styles.emptyText}>No people found for "{query}"</Text> : null
+            !isFetching ? (
+              <Text style={styles.emptyText}>
+                {isDiscover ? 'No suggestions yet — check back once more people join.' : `No people found for "${query}"`}
+              </Text>
+            ) : null
           }
         />
       ) : (
         <FlatList
           style={styles.list}
-          data={mediaSearch.data ?? []}
-          keyExtractor={(item) => `${item.source}-${item.externalId}`}
-          renderItem={({ item }) => <MediaCard media={item} onPress={() => navigation.navigate('ItemDetail', { searchResult: item })} />}
+          data={(isDiscover ? trending.data : mediaSearch.data) ?? []}
+          keyExtractor={(item, index) => ('id' in item ? String(item.id) : `${item.source}-${item.externalId}-${index}`)}
+          renderItem={({ item }) => (
+            <MediaCard
+              media={item}
+              subtitle={
+                isDiscover && 'activityCount' in item
+                  ? `${item.activityCount} recent log${item.activityCount === 1 ? '' : 's'}${
+                      item.averageRating ? ` · ★ ${item.averageRating.toFixed(1)}` : ''
+                    }`
+                  : undefined
+              }
+              onPress={() =>
+                'id' in item
+                  ? navigation.navigate('ItemDetail', { mediaItemId: item.id })
+                  : navigation.navigate('ItemDetail', { searchResult: item })
+              }
+            />
+          )}
           ListEmptyComponent={
-            !isFetching && query.length > 1 ? <Text style={styles.emptyText}>No results for "{query}"</Text> : null
+            !isFetching ? (
+              <Text style={styles.emptyText}>
+                {isDiscover ? 'Nothing trending yet — be the first to log something.' : `No results for "${query}"`}
+              </Text>
+            ) : null
           }
         />
       )}
@@ -129,6 +173,7 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipLabel: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   chipLabelActive: { color: '#0B0D12' },
+  heading: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginTop: spacing.xs },
   list: { flex: 1, marginTop: spacing.sm },
   emptyText: { color: colors.textMuted, textAlign: 'center', marginTop: spacing.lg },
   personRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },

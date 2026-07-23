@@ -1,6 +1,6 @@
 import { HttpError } from '../http.js';
 import { optionalAuth } from '../auth.js';
-import { searchMedia } from '../mediaProviders.js';
+import { searchMedia, SUPPORTED_TYPES } from '../mediaProviders.js';
 import {
   getMediaItem,
   publicMediaItem,
@@ -13,6 +13,7 @@ import {
   publicUser,
   likeMeta,
   countComments,
+  getTrendingMedia,
 } from '../store.js';
 
 export function registerMediaRoutes(router, db, secret) {
@@ -20,6 +21,21 @@ export function registerMediaRoutes(router, db, secret) {
     const { type, q } = ctx.query;
     const results = await searchMedia(type, q);
     return { body: results };
+  });
+
+  // Registered before `/api/media/:id` so "trending" isn't parsed as a media item id.
+  router.get('/api/media/trending', (ctx) => {
+    const { type } = ctx.query;
+    if (type && !SUPPORTED_TYPES.includes(type)) {
+      throw new HttpError(400, `Unsupported media type: ${type}. Use one of ${SUPPORTED_TYPES.join(', ')}`);
+    }
+    let rows = getTrendingMedia(db, { type, days: 30, limit: 20 });
+    if (rows.length === 0) {
+      rows = getTrendingMedia(db, { type, limit: 20 });
+    }
+    return {
+      body: rows.map((row) => ({ ...publicMediaItem(row), ...mediaStats(db, row.id), activityCount: row.activity_count })),
+    };
   });
 
   router.get('/api/media/:id', (ctx) => {

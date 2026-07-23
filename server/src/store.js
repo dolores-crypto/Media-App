@@ -148,6 +148,49 @@ export function mediaStats(db, mediaItemId) {
   return { ratingCount: row.n, averageRating: row.avg != null ? Math.round(row.avg * 100) / 100 : null };
 }
 
+/** Media items ranked by log+review activity, optionally within the last `days` and/or filtered by `type`. */
+export function getTrendingMedia(db, { type, days, limit = 20 } = {}) {
+  const cutoff = days ? new Date(Date.now() - days * 86400000).toISOString() : null;
+  const dateClause = cutoff ? 'AND created_at >= ?' : '';
+  const typeClause = type ? 'AND media_items.type = ?' : '';
+
+  const params = [];
+  if (cutoff) params.push(cutoff);
+  if (cutoff) params.push(cutoff);
+  if (type) params.push(type);
+  params.push(limit);
+
+  return db
+    .prepare(
+      `SELECT media_items.*, COUNT(*) AS activity_count
+       FROM (
+         SELECT media_item_id FROM logs WHERE 1=1 ${dateClause}
+         UNION ALL
+         SELECT media_item_id FROM reviews WHERE media_item_id IS NOT NULL ${dateClause}
+       ) AS activity
+       JOIN media_items ON media_items.id = activity.media_item_id
+       WHERE 1=1 ${typeClause}
+       GROUP BY media_items.id
+       ORDER BY activity_count DESC, media_items.id DESC
+       LIMIT ?`
+    )
+    .all(...params);
+}
+
+/** Users not already followed by `viewerId`, ranked by follower count (ties broken by newest). */
+export function getSuggestedUsers(db, viewerId, { limit = 20 } = {}) {
+  return db
+    .prepare(
+      `SELECT users.*, (SELECT COUNT(*) FROM follows f WHERE f.following_id = users.id) AS follower_count
+       FROM users
+       WHERE users.id != ?
+         AND users.id NOT IN (SELECT following_id FROM follows WHERE follower_id = ?)
+       ORDER BY follower_count DESC, users.created_at DESC
+       LIMIT ?`
+    )
+    .all(viewerId, viewerId, limit);
+}
+
 // --- logs ---
 
 const LOG_STATUSES = ['want', 'in_progress', 'finished', 'dropped'];

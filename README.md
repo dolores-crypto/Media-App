@@ -40,9 +40,9 @@ cd server
 npm test
 ```
 
-Runs the full suite (`node --test`, 15 tests): end-to-end API tests (auth, follows, logs,
-reviews, feed, user search, likes, comments) against a real in-memory database, plus unit
-tests for the media-search response normalizers.
+Runs the full suite (`node --test`, 17 tests): end-to-end API tests (auth, follows, logs,
+reviews, feed, user search, likes, comments, trending media, suggested users) against a
+real in-memory database, plus unit tests for the media-search response normalizers.
 
 ### Media search
 
@@ -62,10 +62,12 @@ table the first time someone logs or reviews it, so it gets a stable local ID go
 | POST `/api/auth/register`, `/api/auth/login` | — | Create a session |
 | GET/PATCH `/api/me` | required | Current user |
 | GET `/api/users/search?q=` | optional | Find people by username/display name |
+| GET `/api/users/suggested` | required | People to follow, ranked by follower count, excludes self + already-followed |
 | GET `/api/users/:username` | optional | Profile + follow counts |
 | POST/DELETE `/api/users/:username/follow` | required | Follow graph |
 | GET `/api/users/:username/{followers,following,logs,reviews}` | — | Lists |
 | GET `/api/media/search`, GET `/api/media/:id` | — | Search + item detail with stats |
+| GET `/api/media/trending?type=&days=` | — | Most-logged/reviewed items (last 30 days, falls back to all-time) |
 | POST/GET/PATCH/DELETE `/api/logs[/:id]` | owner for writes | Status + rating + note |
 | POST/DELETE `/api/logs/:id/like` | required | Like/unlike a log |
 | POST/GET/PATCH/DELETE `/api/reviews[/:id]` | owner for writes | Long-form review, optionally tied to media |
@@ -82,7 +84,9 @@ Screens: login/register, home feed (infinite scroll), cross-type media search + 
 search, item detail (log status + star rating + note, or write a full review), review
 detail (with likes and comments), user profile (logs/reviews tabs, follow/unfollow), edit
 profile, followers/following lists. Logs and reviews can be liked from the feed or their
-detail screen; reviews have a comment thread.
+detail screen; reviews have a comment thread. Clearing the search box (or not typing yet)
+shows discovery content instead of a blank screen: trending items for the selected media
+type, or suggested people to follow.
 
 ### Run it
 
@@ -101,7 +105,7 @@ simulators — use your machine's LAN IP, or `10.0.2.2` for the Android emulator
 
 This was built in a sandboxed environment with **no outbound internet access** — `npm install`
 could not be run at all. That's why the backend was written dependency-free: it was fully
-built, run, and tested (15 passing tests) inside the sandbox. The mobile app could not be
+built, run, and tested (17 passing tests) inside the sandbox. The mobile app could not be
 installed, compiled, or run the same way; its TypeScript was instead sanity-checked with a
 loosely-typed stub pass (no real bugs found) but has **not** been verified with a real
 `tsc`/Metro build or in Expo Go. Before relying on it, run:
