@@ -7,6 +7,8 @@ import { registerLogRoutes } from './routes/logs.js';
 import { registerReviewRoutes } from './routes/reviews.js';
 import { registerCommentRoutes } from './routes/comments.js';
 import { registerFeedRoutes } from './routes/feed.js';
+import { registerNotificationRoutes } from './routes/notifications.js';
+import { registerPushRoutes } from './routes/push.js';
 
 export function createApp({ dbPath = ':memory:', secret }) {
   if (!secret) throw new Error('createApp requires an auth secret');
@@ -22,6 +24,8 @@ export function createApp({ dbPath = ':memory:', secret }) {
   registerReviewRoutes(router, db, secret);
   registerCommentRoutes(router, db, secret);
   registerFeedRoutes(router, db, secret);
+  registerNotificationRoutes(router, db, secret);
+  registerPushRoutes(router, db, secret);
 
   const listener = createRequestListener(router, {
     onError: (err) => console.error('Unhandled error:', err),

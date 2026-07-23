@@ -40,9 +40,10 @@ cd server
 npm test
 ```
 
-Runs the full suite (`node --test`, 17 tests): end-to-end API tests (auth, follows, logs,
-reviews, feed, user search, likes, comments, trending media, suggested users) against a
-real in-memory database, plus unit tests for the media-search response normalizers.
+Runs the full suite (`node --test`, 19 tests): end-to-end API tests (auth, follows, logs,
+reviews, feed, user search, likes, comments, trending media, suggested users, notifications,
+push token registration) against a real in-memory database, plus unit tests for the
+media-search response normalizers.
 
 ### Media search
 
@@ -74,6 +75,14 @@ table the first time someone logs or reviews it, so it gets a stable local ID go
 | POST/DELETE `/api/reviews/:id/like` | required | Like/unlike a review |
 | POST/GET `/api/reviews/:id/comments`, DELETE `/api/comments/:id` | POST/DELETE require auth | Comment thread on a review |
 | GET `/api/feed` | required | Own + followed users' activity, newest first (cursor pagination via `?before=`) |
+| GET `/api/notifications`, GET `/api/notifications/unread-count`, POST `/api/notifications/read` | required | Follow/like/comment notifications, unread count, mark-all-read |
+| POST/DELETE `/api/me/push-tokens` | required | Register/unregister a device for push notifications |
+
+Following, liking, and commenting each create an in-app notification for the recipient
+(never for yourself) and best-effort push it to [Expo's push API](https://docs.expo.dev/push-notifications/sending-notifications/)
+for any registered devices — the push send is fire-and-forget and never blocks or fails
+the underlying action, since actually reaching Expo's servers requires real internet
+access this sandbox doesn't have.
 
 ## Mobile app (`mobile/`)
 
@@ -86,7 +95,9 @@ detail (with likes and comments), user profile (logs/reviews tabs, follow/unfoll
 profile, followers/following lists. Logs and reviews can be liked from the feed or their
 detail screen; reviews have a comment thread. Clearing the search box (or not typing yet)
 shows discovery content instead of a blank screen: trending items for the selected media
-type, or suggested people to follow.
+type, or suggested people to follow. A Notifications tab (bell icon, unread badge) shows
+follows/likes/comments and registers the device for push via `expo-notifications` — best
+effort, since it needs a physical device and a granted permission to do anything.
 
 ### Run it
 
@@ -105,7 +116,7 @@ simulators — use your machine's LAN IP, or `10.0.2.2` for the Android emulator
 
 This was built in a sandboxed environment with **no outbound internet access** — `npm install`
 could not be run at all. That's why the backend was written dependency-free: it was fully
-built, run, and tested (17 passing tests) inside the sandbox. The mobile app could not be
+built, run, and tested (19 passing tests) inside the sandbox. The mobile app could not be
 installed, compiled, or run the same way; its TypeScript was instead sanity-checked with a
 loosely-typed stub pass (no real bugs found) but has **not** been verified with a real
 `tsc`/Metro build or in Expo Go. Before relying on it, run:

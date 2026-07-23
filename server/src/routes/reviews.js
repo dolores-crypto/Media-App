@@ -19,6 +19,7 @@ import {
   listCommentsForReview,
   publicComment,
 } from '../store.js';
+import { notifyUser } from '../notify.js';
 
 function validateRating(rating) {
   if (rating === undefined || rating === null) return null;
@@ -93,6 +94,15 @@ export function registerReviewRoutes(router, db, secret) {
     const user = requireAuth(ctx, db, secret);
     const review = requireReview(db, Number(ctx.params.id));
     likeTarget(db, user.id, 'review', review.id);
+    notifyUser(db, {
+      userId: review.user_id,
+      actorId: user.id,
+      type: 'like',
+      targetType: 'review',
+      targetId: review.id,
+      title: 'New like',
+      body: `${user.display_name} liked your review "${review.title}"`,
+    });
     return { status: 201, body: likeMeta(db, 'review', review.id, user.id) };
   });
 
@@ -109,6 +119,15 @@ export function registerReviewRoutes(router, db, secret) {
     const { body } = ctx.body;
     if (!body || !body.trim()) throw new HttpError(400, 'Comment body is required');
     const comment = createComment(db, { userId: user.id, reviewId: review.id, body: body.trim() });
+    notifyUser(db, {
+      userId: review.user_id,
+      actorId: user.id,
+      type: 'comment',
+      targetType: 'review',
+      targetId: review.id,
+      title: 'New comment',
+      body: `${user.display_name} commented on your review "${review.title}"`,
+    });
     return { status: 201, body: publicComment(comment, { user: publicUser(user) }) };
   });
 

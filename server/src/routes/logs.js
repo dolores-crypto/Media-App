@@ -16,6 +16,7 @@ import {
   unlikeTarget,
   likeMeta,
 } from '../store.js';
+import { notifyUser } from '../notify.js';
 
 function validateRating(rating) {
   if (rating === undefined || rating === null) return null;
@@ -89,6 +90,15 @@ export function registerLogRoutes(router, db, secret) {
     const log = getLog(db, Number(ctx.params.id));
     if (!log) throw new HttpError(404, 'Log not found');
     likeTarget(db, user.id, 'log', log.id);
+    notifyUser(db, {
+      userId: log.user_id,
+      actorId: user.id,
+      type: 'like',
+      targetType: 'log',
+      targetId: log.id,
+      title: 'New like',
+      body: `${user.display_name} liked your log`,
+    });
     return { status: 201, body: likeMeta(db, 'log', log.id, user.id) };
   });
 

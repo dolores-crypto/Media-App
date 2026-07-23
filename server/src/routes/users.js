@@ -20,6 +20,7 @@ import {
   likeMeta,
   getSuggestedUsers,
 } from '../store.js';
+import { notifyUser } from '../notify.js';
 
 function requireProfile(db, username) {
   const user = getUserByUsername(db, username);
@@ -66,6 +67,13 @@ export function registerUserRoutes(router, db, secret) {
     const target = requireProfile(db, ctx.params.username);
     if (target.id === viewer.id) throw new HttpError(400, 'You cannot follow yourself');
     follow(db, viewer.id, target.id);
+    notifyUser(db, {
+      userId: target.id,
+      actorId: viewer.id,
+      type: 'follow',
+      title: 'New follower',
+      body: `${viewer.display_name} started following you`,
+    });
     return { status: 201, body: { following: true } };
   });
 

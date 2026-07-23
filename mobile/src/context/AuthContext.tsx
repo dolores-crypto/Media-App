@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { setAuthToken } from '@/api/client';
 import { AuthApi } from '@/api/resources';
 import type { User } from '@/api/types';
+import { syncPushToken, clearPushToken } from '@/push';
 
 const TOKEN_KEY = 'media-app-token';
 
@@ -29,6 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const me = await AuthApi.me();
           setUser(me);
+          syncPushToken();
         } catch {
           await SecureStore.deleteItemAsync(TOKEN_KEY);
           setAuthToken(null);
@@ -42,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await SecureStore.setItemAsync(TOKEN_KEY, token);
     setAuthToken(token);
     setUser(sessionUser);
+    syncPushToken();
   }
 
   const value = useMemo<AuthContextValue>(
@@ -57,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await applySession(res.token, res.user);
       },
       logout: async () => {
+        await clearPushToken();
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         setAuthToken(null);
         setUser(null);

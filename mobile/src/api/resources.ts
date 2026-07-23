@@ -1,5 +1,6 @@
 import { api } from './client';
 import type {
+  AppNotification,
   AuthResponse,
   Comment,
   FeedEntry,
@@ -88,4 +89,15 @@ export const CommentsApi = {
 
 export const FeedApi = {
   list: (before?: string) => api.get<FeedEntry[]>('/api/feed', before ? { before } : undefined),
+};
+
+export const NotificationsApi = {
+  list: (before?: string) => api.get<AppNotification[]>('/api/notifications', before ? { before } : undefined),
+  unreadCount: () => api.get<{ count: number }>('/api/notifications/unread-count'),
+  markAllRead: () => api.post<{ read: boolean }>('/api/notifications/read'),
+};
+
+export const PushApi = {
+  registerToken: (token: string) => api.post<{ registered: boolean }>('/api/me/push-tokens', { token }),
+  unregisterToken: (token: string) => api.delete<{ registered: boolean }>(`/api/me/push-tokens?token=${encodeURIComponent(token)}`),
 };

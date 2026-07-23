@@ -86,6 +86,23 @@ export interface Comment {
 
 export type FeedEntry = { kind: 'log'; item: LogEntry } | { kind: 'review'; item: Review };
 
+export type NotificationType = 'follow' | 'like' | 'comment';
+
+export type NotificationTarget =
+  | { kind: 'log'; logId: number; mediaItemId: number }
+  | { kind: 'review'; reviewId: number; title: string }
+  | null;
+
+export interface AppNotification {
+  id: number;
+  type: NotificationType;
+  message: string;
+  actor: User;
+  target: NotificationTarget;
+  read: boolean;
+  createdAt: string;
+}
+
 export interface AuthResponse {
   token: string;
   user: User;

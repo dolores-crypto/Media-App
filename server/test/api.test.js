@@ -2,14 +2,17 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createApp } from '../src/app.js';
+import { listPushTokensForUser } from '../src/store.js';
 
 const SECRET = 'test-secret';
 let server;
 let baseUrl;
+let db;
 
 before(async () => {
-  const { listener } = createApp({ dbPath: ':memory:', secret: SECRET });
-  server = createServer(listener);
+  const app = createApp({ dbPath: ':memory:', secret: SECRET });
+  db = app.db;
+  server = createServer(app.listener);
   await new Promise((resolve) => server.listen(0, resolve));
   baseUrl = `http://localhost:${server.address().port}`;
 });
@@ -387,4 +390,91 @@ test('suggested users excludes self and already-followed, ranks by follower coun
   assert.ok(usernames.includes('tara'));
   assert.ok(usernames.includes('vince'));
   assert.ok(usernames.indexOf('tara') < usernames.indexOf('vince'), 'more-followed user ranks first');
+});
+
+test('notifications: follow, like, and comment each notify the recipient (never the actor)', async () => {
+  const wendy = await registerUser('wendy');
+  const xavier = await registerUser('xavier');
+
+  const initialUnread = await api('/api/notifications/unread-count', { token: wendy.token });
+  assert.equal(initialUnread.json.count, 0);
+
+  await api('/api/users/wendy/follow', { method: 'POST', token: xavier.token });
+
+  const afterFollow = await api('/api/notifications', { token: wendy.token });
+  assert.equal(afterFollow.json.length, 1);
+  assert.equal(afterFollow.json[0].type, 'follow');
+  assert.equal(afterFollow.json[0].actor.username, 'xavier');
+  assert.equal(afterFollow.json[0].read, false);
+
+  const unreadAfterFollow = await api('/api/notifications/unread-count', { token: wendy.token });
+  assert.equal(unreadAfterFollow.json.count, 1);
+
+  const review = await api('/api/reviews', {
+    method: 'POST',
+    token: wendy.token,
+    body: { title: 'Notify me', body: 'body text' },
+  });
+
+  // Liking your own review must not notify yourself.
+  await api(`/api/reviews/${review.json.id}/like`, { method: 'POST', token: wendy.token });
+  const afterSelfLike = await api('/api/notifications', { token: wendy.token });
+  assert.equal(afterSelfLike.json.length, 1, 'self-like produced no notification');
+
+  await api(`/api/reviews/${review.json.id}/like`, { method: 'POST', token: xavier.token });
+  await api(`/api/reviews/${review.json.id}/comments`, {
+    method: 'POST',
+    token: xavier.token,
+    body: { body: 'Nice review!' },
+  });
+
+  const afterActivity = await api('/api/notifications', { token: wendy.token });
+  assert.equal(afterActivity.json.length, 3);
+  const types = afterActivity.json.map((n) => n.type);
+  assert.ok(types.includes('like'));
+  assert.ok(types.includes('comment'));
+  const commentNotification = afterActivity.json.find((n) => n.type === 'comment');
+  assert.equal(commentNotification.target.kind, 'review');
+  assert.equal(commentNotification.target.reviewId, review.json.id);
+
+  const markRead = await api('/api/notifications/read', { method: 'POST', token: wendy.token });
+  assert.equal(markRead.status, 200);
+  const unreadAfterMarkRead = await api('/api/notifications/unread-count', { token: wendy.token });
+  assert.equal(unreadAfterMarkRead.json.count, 0);
+
+  const noAuth = await api('/api/notifications');
+  assert.equal(noAuth.status, 401);
+});
+
+test('push tokens: register requires a token, unregister is scoped to the owning user', async () => {
+  const yusuf = await registerUser('yusuf');
+  const zara = await registerUser('zara');
+
+  const missingToken = await api('/api/me/push-tokens', { method: 'POST', token: yusuf.token, body: {} });
+  assert.equal(missingToken.status, 400);
+
+  const register = await api('/api/me/push-tokens', {
+    method: 'POST',
+    token: yusuf.token,
+    body: { token: 'ExponentPushToken[test-token-1]' },
+  });
+  assert.equal(register.status, 201);
+
+  const missingQueryParam = await api('/api/me/push-tokens', { method: 'DELETE', token: yusuf.token });
+  assert.equal(missingQueryParam.status, 400);
+
+  // zara can't delete yusuf's token by guessing it; the row survives untouched.
+  const wrongOwnerDelete = await api(
+    `/api/me/push-tokens?token=${encodeURIComponent('ExponentPushToken[test-token-1]')}`,
+    { method: 'DELETE', token: zara.token }
+  );
+  assert.equal(wrongOwnerDelete.status, 200);
+  assert.equal(listPushTokensForUser(db, yusuf.user.id).length, 1, "another user's delete request must not remove it");
+
+  const ownerDelete = await api(
+    `/api/me/push-tokens?token=${encodeURIComponent('ExponentPushToken[test-token-1]')}`,
+    { method: 'DELETE', token: yusuf.token }
+  );
+  assert.equal(ownerDelete.status, 200);
+  assert.equal(listPushTokensForUser(db, yusuf.user.id).length, 0);
 });

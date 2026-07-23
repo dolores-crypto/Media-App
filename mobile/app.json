@@ -20,6 +20,14 @@
         "backgroundColor": "#111318"
       }
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#5B8CFF"
+        }
+      ]
+    ],
     "extra": {
       "apiUrl": "http://localhost:4000"
     }

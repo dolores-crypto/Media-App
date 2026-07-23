@@ -432,3 +432,53 @@ export function publicComment(comment, { user } = {}) {
     user,
   };
 }
+
+// --- notifications ---
+
+export function createNotification(db, { userId, actorId, type, targetType, targetId }) {
+  const info = db
+    .prepare(
+      `INSERT INTO notifications (user_id, actor_id, type, target_type, target_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(userId, actorId, type, targetType ?? null, targetId ?? null, now());
+  return db.prepare('SELECT * FROM notifications WHERE id = ?').get(Number(info.lastInsertRowid));
+}
+
+export function listNotifications(db, userId, { limit = 30, before } = {}) {
+  if (before) {
+    return db
+      .prepare(
+        `SELECT * FROM notifications WHERE user_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT ?`
+      )
+      .all(userId, before, limit);
+  }
+  return db
+    .prepare(`SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`)
+    .all(userId, limit);
+}
+
+export function countUnreadNotifications(db, userId) {
+  return db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read = 0').get(userId).n;
+}
+
+export function markAllNotificationsRead(db, userId) {
+  db.prepare('UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0').run(userId);
+}
+
+// --- push tokens ---
+
+export function registerPushToken(db, userId, token) {
+  db.prepare(
+    `INSERT INTO push_tokens (user_id, token, created_at) VALUES (?, ?, ?)
+     ON CONFLICT(token) DO UPDATE SET user_id = excluded.user_id`
+  ).run(userId, token, now());
+}
+
+export function unregisterPushToken(db, userId, token) {
+  db.prepare('DELETE FROM push_tokens WHERE user_id = ? AND token = ?').run(userId, token);
+}
+
+export function listPushTokensForUser(db, userId) {
+  return db.prepare('SELECT * FROM push_tokens WHERE user_id = ?').all(userId);
+}
