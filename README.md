@@ -7,8 +7,9 @@ Think Goodreads + Letterboxd + Substack, for every kind of media.
 ## Structure
 
 ```
-server/   Node.js API (auth, follows, media search, logs, reviews, feed)
+server/   Node.js API (auth, follows, media search, logs, reviews, feed, notifications)
 mobile/   React Native (Expo) app
+web/      Plain HTML/CSS/JS web app (no build step, no framework)
 ```
 
 ## Backend (`server/`)
@@ -112,14 +113,59 @@ Point the app at your running API by editing `extra.apiUrl` in `mobile/app.json`
 to `http://localhost:4000`, which won't reach your machine from a physical device or most
 simulators — use your machine's LAN IP, or `10.0.2.2` for the Android emulator).
 
+## Web app (`web/`)
+
+A plain HTML/CSS/JavaScript client — no React, no bundler, no build step. Browsers load
+`js/main.js` as a native ES module, which imports the rest directly; a hash-based router
+(`#/feed`, `#/item/42`, ...) means the static file server never needs SPA rewrite rules.
+Covers the same feature set as the mobile app: auth, feed, media + people search with
+trending/suggested discovery, item detail (log + review), review detail (likes, comments),
+profile (logs/reviews tabs, follow/unfollow), edit profile, follower/following lists, and
+a notifications page with an unread badge in the nav bar.
+
+### Run it
+
+```bash
+cd web
+npm start          # serves the app at http://localhost:5173
+```
+
+It talks to the API at `http://localhost:4000` by default — change `window.MEDIA_APP_CONFIG.apiUrl`
+in `index.html` to point elsewhere. The server (`server.js`) is a ~30-line zero-dependency
+static file server, consistent with the rest of this project.
+
+### Test it
+
+Unlike the mobile app, this one **was** run end-to-end in the sandbox that built it, using
+the Playwright/Chromium install already present in that environment:
+
+```bash
+cd web
+npm run test:e2e   # requires the API (port 4000) and this app (port 5173) already running
+```
+
+`test/e2e.mjs` drives two real browser sessions through registration, logging an item,
+writing a review, following, feed, optimistic likes, comments, notifications (including
+the unread badge), profile editing, and follower lists — 20 checks, all passing. This
+actually caught two real bugs during development (a confirmation message that got wiped
+by an immediate redirect, and a notification-badge poll that raced against session
+restore on page load), which is exactly why this app could be verified this thoroughly
+and the mobile app couldn't: no npm install was needed to run it.
+
+Playwright itself isn't listed as a project dependency (kept dependency-free like the
+rest of the app) — install it yourself to run the test: `npm install -D playwright && npx
+playwright install chromium`.
+
 ## Known limitation of this build
 
 This was built in a sandboxed environment with **no outbound internet access** — `npm install`
-could not be run at all. That's why the backend was written dependency-free: it was fully
-built, run, and tested (19 passing tests) inside the sandbox. The mobile app could not be
-installed, compiled, or run the same way; its TypeScript was instead sanity-checked with a
-loosely-typed stub pass (no real bugs found) but has **not** been verified with a real
-`tsc`/Metro build or in Expo Go. Before relying on it, run:
+could not be run at all. That's why the backend and web app are both dependency-free: they
+were fully built, run, and tested inside the sandbox (19 backend tests, 20 browser-driven
+web checks). The mobile app is the one exception — Expo/React Native can't be made to run
+without `npm install`, so it could not be installed, compiled, or run the same way; its
+TypeScript was instead sanity-checked with a loosely-typed stub pass (no real bugs found)
+but has **not** been verified with a real `tsc`/Metro build or in Expo Go. Before relying
+on it, run:
 
 ```bash
 cd mobile && npm install && npx expo install && npm run typecheck && npx expo start
