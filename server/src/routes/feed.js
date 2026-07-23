@@ -9,6 +9,8 @@ import {
   publicUser,
   getUserById,
   getMediaItem,
+  likeMeta,
+  countComments,
 } from '../store.js';
 
 export function registerFeedRoutes(router, db, secret) {
@@ -19,9 +21,20 @@ export function registerFeedRoutes(router, db, secret) {
       const author = publicUser(getUserById(db, row.user_id));
       const media = row.media_item_id ? publicMediaItem(getMediaItem(db, row.media_item_id)) : null;
       if (row.kind === 'log') {
-        return { kind: 'log', item: publicLog(getLog(db, row.id), { user: author, media }) };
+        return {
+          kind: 'log',
+          item: publicLog(getLog(db, row.id), { user: author, media, ...likeMeta(db, 'log', row.id, user.id) }),
+        };
       }
-      return { kind: 'review', item: publicReview(getReview(db, row.id), { user: author, media }) };
+      return {
+        kind: 'review',
+        item: publicReview(getReview(db, row.id), {
+          user: author,
+          media,
+          commentCount: countComments(db, row.id),
+          ...likeMeta(db, 'review', row.id, user.id),
+        }),
+      };
     });
     return { body: items };
   });

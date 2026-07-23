@@ -25,6 +25,16 @@ export function getUserByUsername(db, username) {
   return db.prepare('SELECT * FROM users WHERE username = ?').get(username) || null;
 }
 
+export function searchUsers(db, query, { limit = 20 } = {}) {
+  const like = `%${query}%`;
+  return db
+    .prepare(
+      `SELECT * FROM users WHERE username LIKE ? OR display_name LIKE ?
+       ORDER BY username ASC LIMIT ?`
+    )
+    .all(like, like, limit);
+}
+
 export function updateUser(db, id, { displayName, bio, avatarUrl }) {
   const current = getUserById(db, id);
   if (!current) return null;
@@ -199,7 +209,7 @@ export function listLogsForMedia(db, mediaItemId, { limit = 50 } = {}) {
     .all(mediaItemId, limit);
 }
 
-export function publicLog(log, { user, media } = {}) {
+export function publicLog(log, { user, media, ...extra } = {}) {
   return {
     id: log.id,
     status: log.status,
@@ -209,6 +219,7 @@ export function publicLog(log, { user, media } = {}) {
     updatedAt: log.updated_at,
     user,
     media,
+    ...extra,
   };
 }
 
@@ -267,7 +278,7 @@ export function listReviewsForMedia(db, mediaItemId, { limit = 50 } = {}) {
     .all(mediaItemId, limit);
 }
 
-export function publicReview(review, { user, media } = {}) {
+export function publicReview(review, { user, media, ...extra } = {}) {
   return {
     id: review.id,
     title: review.title,
@@ -277,6 +288,7 @@ export function publicReview(review, { user, media } = {}) {
     updatedAt: review.updated_at,
     user,
     media,
+    ...extra,
   };
 }
 
@@ -298,4 +310,82 @@ export function getFeed(db, userId, { limit = 30, before } = {}) {
     )
     .all(...(before ? [userId, userId, before, userId, userId, before, limit] : [userId, userId, userId, userId, limit]));
   return rows;
+}
+
+// --- likes ---
+
+const LIKE_TARGET_TYPES = ['log', 'review'];
+
+export function isValidLikeTarget(targetType) {
+  return LIKE_TARGET_TYPES.includes(targetType);
+}
+
+export function likeTarget(db, userId, targetType, targetId) {
+  db.prepare(
+    `INSERT OR IGNORE INTO likes (user_id, target_type, target_id, created_at) VALUES (?, ?, ?, ?)`
+  ).run(userId, targetType, targetId, now());
+}
+
+export function unlikeTarget(db, userId, targetType, targetId) {
+  db.prepare(`DELETE FROM likes WHERE user_id = ? AND target_type = ? AND target_id = ?`).run(
+    userId,
+    targetType,
+    targetId
+  );
+}
+
+export function countLikes(db, targetType, targetId) {
+  return db
+    .prepare('SELECT COUNT(*) AS n FROM likes WHERE target_type = ? AND target_id = ?')
+    .get(targetType, targetId).n;
+}
+
+export function isLikedBy(db, userId, targetType, targetId) {
+  if (!userId) return false;
+  return !!db
+    .prepare('SELECT 1 FROM likes WHERE user_id = ? AND target_type = ? AND target_id = ?')
+    .get(userId, targetType, targetId);
+}
+
+export function likeMeta(db, targetType, targetId, viewerId) {
+  return {
+    likeCount: countLikes(db, targetType, targetId),
+    likedByMe: isLikedBy(db, viewerId, targetType, targetId),
+  };
+}
+
+// --- comments ---
+
+export function createComment(db, { userId, reviewId, body }) {
+  const ts = now();
+  const info = db
+    .prepare(`INSERT INTO comments (user_id, review_id, body, created_at) VALUES (?, ?, ?, ?)`)
+    .run(userId, reviewId, body, ts);
+  return getComment(db, Number(info.lastInsertRowid));
+}
+
+export function getComment(db, id) {
+  return db.prepare('SELECT * FROM comments WHERE id = ?').get(id) || null;
+}
+
+export function deleteComment(db, id) {
+  db.prepare('DELETE FROM comments WHERE id = ?').run(id);
+}
+
+export function listCommentsForReview(db, reviewId) {
+  return db.prepare('SELECT * FROM comments WHERE review_id = ? ORDER BY created_at ASC').all(reviewId);
+}
+
+export function countComments(db, reviewId) {
+  return db.prepare('SELECT COUNT(*) AS n FROM comments WHERE review_id = ?').get(reviewId).n;
+}
+
+export function publicComment(comment, { user } = {}) {
+  return {
+    id: comment.id,
+    body: comment.body,
+    createdAt: comment.created_at,
+    reviewId: comment.review_id,
+    user,
+  };
 }

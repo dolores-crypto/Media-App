@@ -239,3 +239,103 @@ test('media search validates type and query before hitting upstream', async () =
   const missingQuery = await api('/api/media/search?type=book&q=');
   assert.equal(missingQuery.status, 400);
 });
+
+test('user search matches username or display name substrings', async () => {
+  await registerUser('marguerite');
+  await registerUser('margarethe');
+  await registerUser('unrelated_zz');
+
+  const results = await api('/api/users/search?q=marg');
+  assert.equal(results.status, 200);
+  const names = results.json.map((u) => u.username);
+  assert.ok(names.includes('marguerite'));
+  assert.ok(names.includes('margarethe'));
+  assert.ok(!names.includes('unrelated_zz'));
+
+  const empty = await api('/api/users/search?q=');
+  assert.deepEqual(empty.json, []);
+});
+
+test('likes: toggle on a log and a review, counts and likedByMe reflect the viewer', async () => {
+  const mallory = await registerUser('mallory');
+  const nathan = await registerUser('nathan');
+
+  const log = await api('/api/logs', {
+    method: 'POST',
+    token: mallory.token,
+    body: { media: { ...MEDIA_A, externalId: 'like-log-1' }, status: 'finished' },
+  });
+
+  const likeNoAuth = await api(`/api/logs/${log.json.id}/like`, { method: 'POST' });
+  assert.equal(likeNoAuth.status, 401);
+
+  const like = await api(`/api/logs/${log.json.id}/like`, { method: 'POST', token: nathan.token });
+  assert.equal(like.status, 201);
+  assert.equal(like.json.likeCount, 1);
+  assert.equal(like.json.likedByMe, true);
+
+  const fetched = await api(`/api/logs/${log.json.id}`, { token: nathan.token });
+  assert.equal(fetched.json.likeCount, 1);
+  assert.equal(fetched.json.likedByMe, true);
+
+  const fetchedAsOther = await api(`/api/logs/${log.json.id}`, { token: mallory.token });
+  assert.equal(fetchedAsOther.json.likeCount, 1);
+  assert.equal(fetchedAsOther.json.likedByMe, false);
+
+  const unlike = await api(`/api/logs/${log.json.id}/like`, { method: 'DELETE', token: nathan.token });
+  assert.equal(unlike.status, 200);
+  assert.equal(unlike.json.likeCount, 0);
+
+  const review = await api('/api/reviews', {
+    method: 'POST',
+    token: mallory.token,
+    body: { media: { ...MEDIA_A, externalId: 'like-review-1' }, title: 'Liked review', body: 'body' },
+  });
+  const likeReview = await api(`/api/reviews/${review.json.id}/like`, { method: 'POST', token: nathan.token });
+  assert.equal(likeReview.json.likeCount, 1);
+
+  const likeReviewAgain = await api(`/api/reviews/${review.json.id}/like`, { method: 'POST', token: nathan.token });
+  assert.equal(likeReviewAgain.json.likeCount, 1, 'liking twice is idempotent');
+});
+
+test('comments: create, list, owner-only delete', async () => {
+  const oscar = await registerUser('oscar');
+  const peggy = await registerUser('peggy');
+
+  const review = await api('/api/reviews', {
+    method: 'POST',
+    token: oscar.token,
+    body: { title: 'Discuss this', body: 'body text' },
+  });
+
+  const missingBody = await api(`/api/reviews/${review.json.id}/comments`, {
+    method: 'POST',
+    token: peggy.token,
+    body: {},
+  });
+  assert.equal(missingBody.status, 400);
+
+  const comment = await api(`/api/reviews/${review.json.id}/comments`, {
+    method: 'POST',
+    token: peggy.token,
+    body: { body: 'Great point!' },
+  });
+  assert.equal(comment.status, 201);
+  assert.equal(comment.json.user.username, 'peggy');
+
+  const list = await api(`/api/reviews/${review.json.id}/comments`);
+  assert.equal(list.json.length, 1);
+  assert.equal(list.json[0].body, 'Great point!');
+
+  const reviewDetail = await api(`/api/reviews/${review.json.id}`);
+  assert.equal(reviewDetail.json.commentCount, 1);
+
+  const forbiddenDelete = await api(`/api/comments/${comment.json.id}`, { method: 'DELETE', token: oscar.token });
+  assert.equal(forbiddenDelete.status, 403);
+
+  const del = await api(`/api/comments/${comment.json.id}`, { method: 'DELETE', token: peggy.token });
+  assert.equal(del.status, 204);
+
+  const listAfter = await api(`/api/reviews/${review.json.id}/comments`);
+  assert.equal(listAfter.json.length, 0);
+});

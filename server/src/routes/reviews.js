@@ -1,5 +1,5 @@
 import { HttpError } from '../http.js';
-import { requireAuth } from '../auth.js';
+import { requireAuth, optionalAuth } from '../auth.js';
 import { resolveMediaRef } from '../mediaRef.js';
 import {
   createReview,
@@ -11,6 +11,13 @@ import {
   publicUser,
   getUserById,
   getMediaItem,
+  likeTarget,
+  unlikeTarget,
+  likeMeta,
+  countComments,
+  createComment,
+  listCommentsForReview,
+  publicComment,
 } from '../store.js';
 
 function validateRating(rating) {
@@ -21,11 +28,19 @@ function validateRating(rating) {
   return rating;
 }
 
-function hydrate(db, review) {
+function hydrate(db, review, viewerId) {
   return publicReview(review, {
     user: publicUser(getUserById(db, review.user_id)),
     media: review.media_item_id ? publicMediaItem(getMediaItem(db, review.media_item_id)) : null,
+    commentCount: countComments(db, review.id),
+    ...likeMeta(db, 'review', review.id, viewerId),
   });
+}
+
+function requireReview(db, id) {
+  const review = getReview(db, id);
+  if (!review) throw new HttpError(404, 'Review not found');
+  return review;
 }
 
 export function registerReviewRoutes(router, db, secret) {
@@ -42,13 +57,13 @@ export function registerReviewRoutes(router, db, secret) {
       body,
       rating: validateRating(rating),
     });
-    return { status: 201, body: hydrate(db, review) };
+    return { status: 201, body: hydrate(db, review, user.id) };
   });
 
   router.get('/api/reviews/:id', (ctx) => {
-    const review = getReview(db, Number(ctx.params.id));
-    if (!review) throw new HttpError(404, 'Review not found');
-    return { body: hydrate(db, review) };
+    const review = requireReview(db, Number(ctx.params.id));
+    const viewer = optionalAuth(ctx, db, secret);
+    return { body: hydrate(db, review, viewer?.id) };
   });
 
   router.patch('/api/reviews/:id', (ctx) => {
@@ -62,7 +77,7 @@ export function registerReviewRoutes(router, db, secret) {
       body,
       rating: rating === undefined ? undefined : validateRating(rating),
     });
-    return { body: hydrate(db, review) };
+    return { body: hydrate(db, review, user.id) };
   });
 
   router.delete('/api/reviews/:id', (ctx) => {
@@ -72,5 +87,36 @@ export function registerReviewRoutes(router, db, secret) {
     if (existing.user_id !== user.id) throw new HttpError(403, 'You can only delete your own reviews');
     deleteReview(db, existing.id);
     return { status: 204, body: null };
+  });
+
+  router.post('/api/reviews/:id/like', (ctx) => {
+    const user = requireAuth(ctx, db, secret);
+    const review = requireReview(db, Number(ctx.params.id));
+    likeTarget(db, user.id, 'review', review.id);
+    return { status: 201, body: likeMeta(db, 'review', review.id, user.id) };
+  });
+
+  router.delete('/api/reviews/:id/like', (ctx) => {
+    const user = requireAuth(ctx, db, secret);
+    const review = requireReview(db, Number(ctx.params.id));
+    unlikeTarget(db, user.id, 'review', review.id);
+    return { body: likeMeta(db, 'review', review.id, user.id) };
+  });
+
+  router.post('/api/reviews/:id/comments', (ctx) => {
+    const user = requireAuth(ctx, db, secret);
+    const review = requireReview(db, Number(ctx.params.id));
+    const { body } = ctx.body;
+    if (!body || !body.trim()) throw new HttpError(400, 'Comment body is required');
+    const comment = createComment(db, { userId: user.id, reviewId: review.id, body: body.trim() });
+    return { status: 201, body: publicComment(comment, { user: publicUser(user) }) };
+  });
+
+  router.get('/api/reviews/:id/comments', (ctx) => {
+    const review = requireReview(db, Number(ctx.params.id));
+    const comments = listCommentsForReview(db, review.id);
+    return {
+      body: comments.map((comment) => publicComment(comment, { user: publicUser(getUserById(db, comment.user_id)) })),
+    };
   });
 }

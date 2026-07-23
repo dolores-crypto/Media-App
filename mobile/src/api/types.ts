@@ -52,6 +52,8 @@ export interface LogEntry {
   updatedAt: string;
   user: User;
   media: MediaItem;
+  likeCount: number;
+  likedByMe: boolean;
 }
 
 export interface Review {
@@ -63,6 +65,17 @@ export interface Review {
   updatedAt: string;
   user: User;
   media: MediaItem | null;
+  likeCount: number;
+  likedByMe: boolean;
+  commentCount: number;
+}
+
+export interface Comment {
+  id: number;
+  body: string;
+  createdAt: string;
+  reviewId: number;
+  user: User;
 }
 
 export type FeedEntry = { kind: 'log'; item: LogEntry } | { kind: 'review'; item: Review };

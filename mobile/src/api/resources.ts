@@ -1,6 +1,7 @@
 import { api } from './client';
 import type {
   AuthResponse,
+  Comment,
   FeedEntry,
   LogEntry,
   LogStatus,
@@ -10,6 +11,11 @@ import type {
   Review,
   User,
 } from './types';
+
+interface LikeMeta {
+  likeCount: number;
+  likedByMe: boolean;
+}
 
 export interface MediaRef {
   mediaItemId?: number;
@@ -34,6 +40,7 @@ export const AuthApi = {
 };
 
 export const UsersApi = {
+  search: (q: string) => api.get<User[]>('/api/users/search', { q }),
   profile: (username: string) => api.get<User>(`/api/users/${encodeURIComponent(username)}`),
   follow: (username: string) => api.post<{ following: boolean }>(`/api/users/${encodeURIComponent(username)}/follow`),
   unfollow: (username: string) => api.delete<{ following: boolean }>(`/api/users/${encodeURIComponent(username)}/follow`),
@@ -55,6 +62,8 @@ export const LogsApi = {
   update: (id: number, input: { status?: LogStatus; rating?: number | null; note?: string }) =>
     api.patch<LogEntry>(`/api/logs/${id}`, input),
   remove: (id: number) => api.delete<null>(`/api/logs/${id}`),
+  like: (id: number) => api.post<LikeMeta>(`/api/logs/${id}/like`),
+  unlike: (id: number) => api.delete<LikeMeta>(`/api/logs/${id}/like`),
 };
 
 export const ReviewsApi = {
@@ -64,6 +73,14 @@ export const ReviewsApi = {
   update: (id: number, input: { title?: string; body?: string; rating?: number | null }) =>
     api.patch<Review>(`/api/reviews/${id}`, input),
   remove: (id: number) => api.delete<null>(`/api/reviews/${id}`),
+  like: (id: number) => api.post<LikeMeta>(`/api/reviews/${id}/like`),
+  unlike: (id: number) => api.delete<LikeMeta>(`/api/reviews/${id}/like`),
+};
+
+export const CommentsApi = {
+  list: (reviewId: number) => api.get<Comment[]>(`/api/reviews/${reviewId}/comments`),
+  create: (reviewId: number, body: string) => api.post<Comment>(`/api/reviews/${reviewId}/comments`, { body }),
+  remove: (id: number) => api.delete<null>(`/api/comments/${id}`),
 };
 
 export const FeedApi = {

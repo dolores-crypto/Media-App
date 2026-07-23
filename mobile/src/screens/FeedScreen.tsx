@@ -1,15 +1,23 @@
 import React from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { FeedApi } from '@/api/resources';
 import { ActivityFeedItem } from '@/components/ActivityFeedItem';
 import { colors, spacing } from '@/theme/theme';
 
+const PAGE_SIZE = 30;
+
 export function FeedScreen() {
-  const { data, isLoading, isRefetching, refetch, error } = useQuery({
-    queryKey: ['feed'],
-    queryFn: () => FeedApi.list(),
-  });
+  const { data, isLoading, isRefetching, refetch, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useInfiniteQuery({
+      queryKey: ['feed'],
+      queryFn: ({ pageParam }: { pageParam?: string }) => FeedApi.list(pageParam),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (lastPage) =>
+        lastPage.length < PAGE_SIZE ? undefined : lastPage[lastPage.length - 1]?.item.createdAt,
+    });
+
+  const entries = data?.pages.flat() ?? [];
 
   if (isLoading) {
     return (
@@ -31,10 +39,15 @@ export function FeedScreen() {
     <FlatList
       contentContainerStyle={styles.list}
       style={styles.container}
-      data={data ?? []}
+      data={entries}
       keyExtractor={(entry) => `${entry.kind}-${entry.item.id}`}
       renderItem={({ item }) => <ActivityFeedItem entry={item} />}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
+      onEndReachedThreshold={0.4}
+      onEndReached={() => {
+        if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+      }}
+      ListFooterComponent={isFetchingNextPage ? <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} /> : null}
       ListEmptyComponent={
         <View style={styles.center}>
           <Text style={styles.emptyText}>

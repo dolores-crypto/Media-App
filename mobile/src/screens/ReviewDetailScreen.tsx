@@ -7,6 +7,8 @@ import { ReviewsApi } from '@/api/resources';
 import { useAuth } from '@/context/AuthContext';
 import { MediaCard } from '@/components/MediaCard';
 import { StarRating } from '@/components/StarRating';
+import { LikeButton } from '@/components/LikeButton';
+import { CommentsSection } from '@/components/CommentsSection';
 import { colors, spacing } from '@/theme/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReviewDetail'>;
@@ -56,6 +58,8 @@ export function ReviewDetailScreen({ route, navigation }: Props) {
 
       <Text style={styles.body}>{review.body}</Text>
 
+      <LikeButton targetType="review" targetId={review.id} likeCount={review.likeCount} likedByMe={review.likedByMe} />
+
       {isOwner ? (
         <View style={styles.ownerActions}>
           <Pressable style={styles.actionButton} onPress={() => navigation.navigate('WriteReview', { reviewId: review.id })}>
@@ -74,6 +78,8 @@ export function ReviewDetailScreen({ route, navigation }: Props) {
           </Pressable>
         </View>
       ) : null}
+
+      <CommentsSection reviewId={review.id} />
     </ScrollView>
   );
 }

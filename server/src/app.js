@@ -5,6 +5,7 @@ import { registerUserRoutes } from './routes/users.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerLogRoutes } from './routes/logs.js';
 import { registerReviewRoutes } from './routes/reviews.js';
+import { registerCommentRoutes } from './routes/comments.js';
 import { registerFeedRoutes } from './routes/feed.js';
 
 export function createApp({ dbPath = ':memory:', secret }) {
@@ -16,9 +17,10 @@ export function createApp({ dbPath = ':memory:', secret }) {
 
   registerAuthRoutes(router, db, secret);
   registerUserRoutes(router, db, secret);
-  registerMediaRoutes(router, db);
+  registerMediaRoutes(router, db, secret);
   registerLogRoutes(router, db, secret);
   registerReviewRoutes(router, db, secret);
+  registerCommentRoutes(router, db, secret);
   registerFeedRoutes(router, db, secret);
 
   const listener = createRequestListener(router, {

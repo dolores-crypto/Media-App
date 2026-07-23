@@ -1,5 +1,5 @@
 import { HttpError } from '../http.js';
-import { requireAuth } from '../auth.js';
+import { requireAuth, optionalAuth } from '../auth.js';
 import { resolveMediaRef } from '../mediaRef.js';
 import {
   createLog,
@@ -12,6 +12,9 @@ import {
   publicUser,
   getUserById,
   getMediaItem,
+  likeTarget,
+  unlikeTarget,
+  likeMeta,
 } from '../store.js';
 
 function validateRating(rating) {
@@ -22,10 +25,11 @@ function validateRating(rating) {
   return rating;
 }
 
-function hydrate(db, log) {
+function hydrate(db, log, viewerId) {
   return publicLog(log, {
     user: publicUser(getUserById(db, log.user_id)),
     media: publicMediaItem(getMediaItem(db, log.media_item_id)),
+    ...likeMeta(db, 'log', log.id, viewerId),
   });
 }
 
@@ -44,13 +48,14 @@ export function registerLogRoutes(router, db, secret) {
       rating: validateRating(rating),
       note,
     });
-    return { status: 201, body: hydrate(db, log) };
+    return { status: 201, body: hydrate(db, log, user.id) };
   });
 
   router.get('/api/logs/:id', (ctx) => {
     const log = getLog(db, Number(ctx.params.id));
     if (!log) throw new HttpError(404, 'Log not found');
-    return { body: hydrate(db, log) };
+    const viewer = optionalAuth(ctx, db, secret);
+    return { body: hydrate(db, log, viewer?.id) };
   });
 
   router.patch('/api/logs/:id', (ctx) => {
@@ -67,7 +72,7 @@ export function registerLogRoutes(router, db, secret) {
       rating: rating === undefined ? undefined : validateRating(rating),
       note,
     });
-    return { body: hydrate(db, log) };
+    return { body: hydrate(db, log, user.id) };
   });
 
   router.delete('/api/logs/:id', (ctx) => {
@@ -77,5 +82,21 @@ export function registerLogRoutes(router, db, secret) {
     if (existing.user_id !== user.id) throw new HttpError(403, 'You can only delete your own logs');
     deleteLog(db, existing.id);
     return { status: 204, body: null };
+  });
+
+  router.post('/api/logs/:id/like', (ctx) => {
+    const user = requireAuth(ctx, db, secret);
+    const log = getLog(db, Number(ctx.params.id));
+    if (!log) throw new HttpError(404, 'Log not found');
+    likeTarget(db, user.id, 'log', log.id);
+    return { status: 201, body: likeMeta(db, 'log', log.id, user.id) };
+  });
+
+  router.delete('/api/logs/:id/like', (ctx) => {
+    const user = requireAuth(ctx, db, secret);
+    const log = getLog(db, Number(ctx.params.id));
+    if (!log) throw new HttpError(404, 'Log not found');
+    unlikeTarget(db, user.id, 'log', log.id);
+    return { body: likeMeta(db, 'log', log.id, user.id) };
   });
 }

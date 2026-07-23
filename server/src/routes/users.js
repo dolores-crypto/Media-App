@@ -2,6 +2,7 @@ import { HttpError } from '../http.js';
 import { requireAuth, optionalAuth } from '../auth.js';
 import {
   getUserByUsername,
+  searchUsers,
   publicUser,
   countFollowers,
   countFollowing,
@@ -16,6 +17,7 @@ import {
   publicMediaItem,
   publicLog,
   publicReview,
+  likeMeta,
 } from '../store.js';
 
 function requireProfile(db, username) {
@@ -25,6 +27,19 @@ function requireProfile(db, username) {
 }
 
 export function registerUserRoutes(router, db, secret) {
+  // Registered before `/api/users/:username` so "search" isn't parsed as a username.
+  router.get('/api/users/search', (ctx) => {
+    const q = (ctx.query.q || '').trim();
+    if (!q) return { body: [] };
+    const viewer = optionalAuth(ctx, db, secret);
+    const results = searchUsers(db, q);
+    return {
+      body: results.map((u) =>
+        publicUser(u, { isFollowedByMe: viewer ? isFollowing(db, viewer.id, u.id) : false })
+      ),
+    };
+  });
+
   router.get('/api/users/:username', (ctx) => {
     const profile = requireProfile(db, ctx.params.username);
     const viewer = optionalAuth(ctx, db, secret);
@@ -65,22 +80,29 @@ export function registerUserRoutes(router, db, secret) {
 
   router.get('/api/users/:username/logs', (ctx) => {
     const profile = requireProfile(db, ctx.params.username);
+    const viewer = optionalAuth(ctx, db, secret);
     const logs = listLogsByUser(db, profile.id, { before: ctx.query.before });
     return {
       body: logs.map((log) =>
-        publicLog(log, { user: publicUser(profile), media: publicMediaItem(getMediaItem(db, log.media_item_id)) })
+        publicLog(log, {
+          user: publicUser(profile),
+          media: publicMediaItem(getMediaItem(db, log.media_item_id)),
+          ...likeMeta(db, 'log', log.id, viewer?.id),
+        })
       ),
     };
   });
 
   router.get('/api/users/:username/reviews', (ctx) => {
     const profile = requireProfile(db, ctx.params.username);
+    const viewer = optionalAuth(ctx, db, secret);
     const reviews = listReviewsByUser(db, profile.id, { before: ctx.query.before });
     return {
       body: reviews.map((review) =>
         publicReview(review, {
           user: publicUser(profile),
           media: review.media_item_id ? publicMediaItem(getMediaItem(db, review.media_item_id)) : null,
+          ...likeMeta(db, 'review', review.id, viewer?.id),
         })
       ),
     };

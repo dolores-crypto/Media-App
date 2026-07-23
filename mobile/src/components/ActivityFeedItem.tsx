@@ -6,6 +6,7 @@ import type { RootStackParamList } from '@/navigation/types';
 import type { FeedEntry } from '@/api/types';
 import { MediaCard } from './MediaCard';
 import { StarRating } from './StarRating';
+import { LikeButton } from './LikeButton';
 import { colors, spacing, statusLabels } from '@/theme/theme';
 
 function timeAgo(iso: string) {
@@ -39,7 +40,10 @@ export function ActivityFeedItem({ entry }: { entry: FeedEntry }) {
         <MediaCard media={log.media} onPress={() => navigation.navigate('ItemDetail', { mediaItemId: log.media.id })} />
         {log.rating ? <StarRating rating={log.rating} /> : null}
         {log.note ? <Text style={styles.note}>{log.note}</Text> : null}
-        <Text style={styles.timestamp}>{timeAgo(log.createdAt)}</Text>
+        <View style={styles.footer}>
+          <Text style={styles.timestamp}>{timeAgo(log.createdAt)}</Text>
+          <LikeButton targetType="log" targetId={log.id} likeCount={log.likeCount} likedByMe={log.likedByMe} />
+        </View>
       </View>
     );
   }
@@ -59,7 +63,13 @@ export function ActivityFeedItem({ entry }: { entry: FeedEntry }) {
         <MediaCard media={review.media} onPress={() => navigation.navigate('ItemDetail', { mediaItemId: review.media!.id })} />
       ) : null}
       {review.rating ? <StarRating rating={review.rating} /> : null}
-      <Text style={styles.timestamp}>{timeAgo(review.createdAt)}</Text>
+      <View style={styles.footer}>
+        <Text style={styles.timestamp}>
+          {timeAgo(review.createdAt)}
+          {review.commentCount > 0 ? ` · ${review.commentCount} comment${review.commentCount === 1 ? '' : 's'}` : ''}
+        </Text>
+        <LikeButton targetType="review" targetId={review.id} likeCount={review.likeCount} likedByMe={review.likedByMe} />
+      </View>
     </View>
   );
 }
@@ -78,5 +88,6 @@ const styles = StyleSheet.create({
   note: { color: colors.text, fontSize: 14, marginTop: spacing.xs },
   reviewTitle: { color: colors.text, fontSize: 17, fontWeight: '700', marginTop: 2 },
   reviewSnippet: { color: colors.textMuted, fontSize: 14, marginTop: 2 },
-  timestamp: { color: colors.textMuted, fontSize: 11, marginTop: spacing.xs },
+  timestamp: { color: colors.textMuted, fontSize: 11 },
+  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs },
 });

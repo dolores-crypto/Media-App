@@ -59,6 +59,25 @@ CREATE TABLE IF NOT EXISTS reviews (
 );
 CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_media ON reviews(media_item_id);
+
+CREATE TABLE IF NOT EXISTS likes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  target_type TEXT NOT NULL,
+  target_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, target_type, target_id)
+);
+CREATE INDEX IF NOT EXISTS idx_likes_target ON likes(target_type, target_id);
+
+CREATE TABLE IF NOT EXISTS comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  review_id INTEGER NOT NULL REFERENCES reviews(id),
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_comments_review ON comments(review_id);
 `;
 
 export function openDb(path) {
