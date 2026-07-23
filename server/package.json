@@ -1,0 +1,16 @@
+{
+  "name": "media-app-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "API for Media-App: log, review, and follow what you're reading/watching/listening to.",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Media-App",
+    "slug": "media-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "backgroundColor": "#111318"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "co.editandelevate.mediaapp"
+    },
+    "android": {
+      "package": "co.editandelevate.mediaapp",
+      "adaptiveIcon": {
+        "backgroundColor": "#111318"
+      }
+    },
+    "extra": {
+      "apiUrl": "http://localhost:4000"
+    }
+  }
+}
